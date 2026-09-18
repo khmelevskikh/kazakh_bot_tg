@@ -1,8 +1,19 @@
+import os
+
+from flask import Flask, request
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+)
 
 
-TOKEN = "СЮДА_ВСТАВЬ_ТОКЕН"
+TOKEN = os.environ["TELEGRAM_TOKEN"]
+
+app = Flask(__name__)
+
+telegram_app = Application.builder().token(TOKEN).build()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -11,16 +22,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-def main():
-    application = Application.builder().token(TOKEN).build()
+telegram_app.add_handler(
+    CommandHandler("start", start)
+)
 
-    application.add_handler(
-        CommandHandler("start", start)
+
+@app.route("/")
+def index():
+    return "Kazakh bot is running"
+
+
+@app.route("/webhook", methods=["POST"])
+async def webhook():
+    update = Update.de_json(
+        request.get_json(force=True),
+        telegram_app.bot
     )
 
-    print("Bot started...")
-    application.run_polling()
+    await telegram_app.process_update(update)
+
+    return "OK"
 
 
 if __name__ == "__main__":
-    main()
+    port = int(os.environ.get("PORT", 10000))
+
+    app.run(
+        host="0.0.0.0",
+        port=port
+    )
