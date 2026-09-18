@@ -850,7 +850,7 @@ async def answer(
             result = (
 
                 "✅ <b>Правильно!</b>\n\n"
-
+                f"Перевод: <b>{correct_answer}</b>\n"
                 "🎓 <b>Слово выучено!</b>\n"
 
                 f"Прогресс: "
@@ -863,7 +863,7 @@ async def answer(
             result = (
 
                 "✅ <b>Правильно!</b>\n\n"
-
+                f"Перевод: <b>{correct_answer}</b>\n"
                 f"Прогресс слова: "
                 f"<b>{correct_count}/"
                 f"{WORDS_TO_LEARN}</b>"
