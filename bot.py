@@ -9,6 +9,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
+
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -17,33 +18,48 @@ from telegram.ext import (
 )
 
 
+# =========================================================
+# Настройки
+# =========================================================
+
 TOKEN = os.environ["TELEGRAM_TOKEN"]
 
-PORT = int(os.environ.get("PORT", "10000"))
+PORT = int(
+    os.environ.get("PORT", "10000")
+)
+
 PUBLIC_URL = os.environ["RENDER_EXTERNAL_URL"]
 
-
-# ---------------------------------------------------------
-# Настройки
-# ---------------------------------------------------------
-
-WORDS_PER_PAGE = 15
 
 # Сколько правильных ответов подряд нужно
 # для полного изучения слова
 WORDS_TO_LEARN = 5
 
+# Сколько слов показывать на странице словаря
+WORDS_PER_PAGE = 15
 
-# ---------------------------------------------------------
+
+# Режимы теста
+
+QUIZ_MODE_KK_RU = "kk_ru"
+QUIZ_MODE_RU_KK = "ru_kk"
+QUIZ_MODE_ERRORS = "errors"
+
+
+# =========================================================
 # Загрузка слов
-# ---------------------------------------------------------
+# =========================================================
 
 def load_words(filename):
     """Read words from Markdown table."""
 
     words = []
 
-    with open(filename, "r", encoding="utf-8") as f:
+    with open(
+        filename,
+        "r",
+        encoding="utf-8"
+    ) as f:
 
         for line in f:
 
@@ -53,7 +69,10 @@ def load_words(filename):
                 continue
 
             # Skip Markdown separator
-            if re.match(r"^\|\s*-+", line):
+            if re.match(
+                r"^\|\s*-+",
+                line
+            ):
                 continue
 
             match = re.match(
@@ -86,12 +105,14 @@ def load_words(filename):
 
 WORDS = load_words("words.md")
 
-print(f"Loaded {len(WORDS)} words")
+print(
+    f"Loaded {len(WORDS)} words"
+)
 
 
-# ---------------------------------------------------------
+# =========================================================
 # Статистика
-# ---------------------------------------------------------
+# =========================================================
 
 def get_statistics(context):
 
@@ -106,21 +127,27 @@ def get_statistics(context):
     return context.user_data["statistics"]
 
 
-# ---------------------------------------------------------
+# =========================================================
 # Прогресс изучения слов
-# ---------------------------------------------------------
+# =========================================================
 
 def get_word_progress(context):
 
     if "word_progress" not in context.user_data:
+
         context.user_data["word_progress"] = {}
 
     return context.user_data["word_progress"]
 
 
-def get_word_correct_count(context, word):
+def get_word_correct_count(
+    context,
+    word
+):
 
-    progress = get_word_progress(context)
+    progress = get_word_progress(
+        context
+    )
 
     return progress.get(
         word["kazakh"],
@@ -128,13 +155,21 @@ def get_word_correct_count(context, word):
     )
 
 
-def increase_word_progress(context, word):
+def increase_word_progress(
+    context,
+    word
+):
 
-    progress = get_word_progress(context)
+    progress = get_word_progress(
+        context
+    )
 
     key = word["kazakh"]
 
-    current = progress.get(key, 0)
+    current = progress.get(
+        key,
+        0
+    )
 
     progress[key] = min(
         current + 1,
@@ -142,9 +177,14 @@ def increase_word_progress(context, word):
     )
 
 
-def reset_word_progress(context, word):
+def reset_word_progress(
+    context,
+    word
+):
 
-    progress = get_word_progress(context)
+    progress = get_word_progress(
+        context
+    )
 
     key = word["kazakh"]
 
@@ -153,7 +193,9 @@ def reset_word_progress(context, word):
 
 def get_learned_words_count(context):
 
-    progress = get_word_progress(context)
+    progress = get_word_progress(
+        context
+    )
 
     return sum(
         1
@@ -165,9 +207,13 @@ def get_learned_words_count(context):
     )
 
 
-def get_words_in_progress_count(context):
+def get_words_in_progress_count(
+    context
+):
 
-    progress = get_word_progress(context)
+    progress = get_word_progress(
+        context
+    )
 
     return sum(
         1
@@ -179,21 +225,27 @@ def get_words_in_progress_count(context):
     )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # Ошибки пользователя
-# ---------------------------------------------------------
+# =========================================================
 
 def get_mistakes(context):
 
     if "mistakes" not in context.user_data:
+
         context.user_data["mistakes"] = {}
 
     return context.user_data["mistakes"]
 
 
-def add_mistake(context, word):
+def add_mistake(
+    context,
+    word
+):
 
-    mistakes = get_mistakes(context)
+    mistakes = get_mistakes(
+        context
+    )
 
     key = word["kazakh"]
 
@@ -208,9 +260,14 @@ def add_mistake(context, word):
     mistakes[key]["wrong"] += 1
 
 
-def remove_mistake(context, word):
+def remove_mistake(
+    context,
+    word
+):
 
-    mistakes = get_mistakes(context)
+    mistakes = get_mistakes(
+        context
+    )
 
     key = word["kazakh"]
 
@@ -220,27 +277,30 @@ def remove_mistake(context, word):
     mistakes[key]["wrong"] -= 1
 
     if mistakes[key]["wrong"] <= 0:
+
         del mistakes[key]
 
 
-# ---------------------------------------------------------
-# Получение вопроса
-# ---------------------------------------------------------
+# =========================================================
+# Генерация вопроса
+# =========================================================
 
 def get_question(context):
 
     quiz_mode = context.user_data.get(
         "quiz_mode",
-        "all"
+        QUIZ_MODE_KK_RU
     )
 
     # -----------------------------------------------------
-    # Режим тренировки ошибок
+    # Режим ошибок
     # -----------------------------------------------------
 
-    if quiz_mode == "errors":
+    if quiz_mode == QUIZ_MODE_ERRORS:
 
-        mistakes = get_mistakes(context)
+        mistakes = get_mistakes(
+            context
+        )
 
         if mistakes:
 
@@ -248,10 +308,13 @@ def get_question(context):
                 mistakes.values()
             )
 
-            # Слова с большим количеством ошибок
-            # выпадают чаще
+            # Чем больше ошибок,
+            # тем чаще слово появляется
             weights = [
-                max(1, word["wrong"])
+                max(
+                    1,
+                    word["wrong"]
+                )
                 for word in mistake_words
             ]
 
@@ -263,84 +326,164 @@ def get_question(context):
 
         else:
 
-            # Ошибок больше нет
-            context.user_data["quiz_mode"] = "all"
+            context.user_data[
+                "quiz_mode"
+            ] = QUIZ_MODE_KK_RU
 
-            question = random.choice(WORDS)
+            question = random.choice(
+                WORDS
+            )
 
     # -----------------------------------------------------
-    # Обычный режим
+    # Обычные режимы
     # -----------------------------------------------------
 
     else:
 
-        progress = get_word_progress(context)
+        progress = get_word_progress(
+            context
+        )
 
-        # Только слова, которые ещё не выучены
+        # Берём только слова,
+        # которые ещё не изучены
         available_words = [
+
             word
+
             for word in WORDS
+
             if progress.get(
                 word["kazakh"],
                 0
             ) < WORDS_TO_LEARN
+
         ]
 
-        # Если ещё есть неизученные слова
         if available_words:
 
             question = random.choice(
                 available_words
             )
 
-        # Все слова изучены
         else:
 
-            context.user_data["all_words_learned"] = True
+            context.user_data[
+                "all_words_learned"
+            ] = True
 
-            question = random.choice(WORDS)
-
-    correct_answer = question["russian"]
+            question = random.choice(
+                WORDS
+            )
 
     # -----------------------------------------------------
-    # Варианты ответа
+    # Направление перевода
     # -----------------------------------------------------
 
-    other_words = [
-        word
-        for word in WORDS
-        if word["russian"] != correct_answer
-    ]
+    if quiz_mode == QUIZ_MODE_RU_KK:
 
-    wrong_answers = random.sample(
-        other_words,
-        min(3, len(other_words))
+        # Русский вопрос
+        question_text = question["russian"]
+
+        # Правильный ответ на казахском
+        correct_answer = question["kazakh"]
+
+        # Другие казахские слова
+        other_words = [
+
+            word
+
+            for word in WORDS
+
+            if word["kazakh"]
+            != correct_answer
+
+        ]
+
+        wrong_answers = random.sample(
+            other_words,
+            min(
+                3,
+                len(other_words)
+            )
+        )
+
+        answers = [
+            correct_answer,
+            *[
+                word["kazakh"]
+                for word in wrong_answers
+            ]
+        ]
+
+    else:
+
+        # Казахский вопрос
+        question_text = question["kazakh"]
+
+        # Правильный ответ на русском
+        correct_answer = question["russian"]
+
+        # Другие русские переводы
+        other_words = [
+
+            word
+
+            for word in WORDS
+
+            if word["russian"]
+            != correct_answer
+
+        ]
+
+        wrong_answers = random.sample(
+            other_words,
+            min(
+                3,
+                len(other_words)
+            )
+        )
+
+        answers = [
+            correct_answer,
+            *[
+                word["russian"]
+                for word in wrong_answers
+            ]
+        ]
+
+    random.shuffle(
+        answers
     )
 
-    answers = [
-        correct_answer,
-        *[
-            word["russian"]
-            for word in wrong_answers
-        ]
-    ]
-
-    random.shuffle(answers)
-
-    return question, answers
+    return (
+        question,
+        question_text,
+        answers,
+        correct_answer
+    )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # Отправка вопроса
-# ---------------------------------------------------------
+# =========================================================
 
-async def send_question(chat_id, context):
+async def send_question(
+    chat_id,
+    context
+):
 
-    question, answers = get_question(context)
+    (
+        question,
+        question_text,
+        answers,
+        correct_answer
+    ) = get_question(
+        context
+    )
 
     mode = context.user_data.get(
         "quiz_mode",
-        "all"
+        QUIZ_MODE_KK_RU
     )
 
     progress = get_word_correct_count(
@@ -348,53 +491,86 @@ async def send_question(chat_id, context):
         question
     )
 
-    # Сохраняем вопрос
-    context.user_data["current_question"] = {
+    # Сохраняем текущий вопрос
 
-        "kazakh": question["kazakh"],
+    context.user_data[
+        "current_question"
+    ] = {
 
-        "correct": question["russian"],
+        "kazakh":
+            question["kazakh"],
 
-        "answers": answers,
+        "russian":
+            question["russian"],
 
-        "mode": mode,
+        "correct":
+            correct_answer,
 
+        "answers":
+            answers,
+
+        "mode":
+            mode,
     }
 
     buttons = []
 
-    for index, answer_text in enumerate(answers):
+    for index, answer_text in enumerate(
+        answers
+    ):
 
         buttons.append([
+
             InlineKeyboardButton(
                 answer_text,
-                callback_data=f"answer:{index}"
+                callback_data=(
+                    f"answer:{index}"
+                )
             )
+
         ])
 
-    keyboard = InlineKeyboardMarkup(buttons)
+    keyboard = InlineKeyboardMarkup(
+        buttons
+    )
 
-    if mode == "errors":
+    # Заголовок режима
 
-        title = "📚 <b>Тренировка ошибок</b>"
+    if mode == QUIZ_MODE_ERRORS:
+
+        title = (
+            "📚 <b>Тренировка ошибок</b>"
+        )
+
+    elif mode == QUIZ_MODE_RU_KK:
+
+        title = (
+            "🇷🇺 → 🇰🇿 "
+            "<b>Русский → Казахский</b>"
+        )
 
     else:
 
-        title = "🎯 <b>Тест</b>"
+        title = (
+            "🇰🇿 → 🇷🇺 "
+            "<b>Казахский → Русский</b>"
+        )
 
     await context.bot.send_message(
 
         chat_id=chat_id,
 
         text=(
+
             f"{title}\n\n"
 
-            f"🇰🇿 <b>{question['kazakh']}</b>\n\n"
+            f"<b>{question_text}</b>\n\n"
 
             f"Прогресс слова: "
-            f"<b>{progress}/{WORDS_TO_LEARN}</b>\n\n"
+            f"<b>{progress}/"
+            f"{WORDS_TO_LEARN}</b>\n\n"
 
-            f"Выберите перевод:"
+            "Выберите перевод:"
         ),
 
         reply_markup=keyboard,
@@ -403,13 +579,18 @@ async def send_question(chat_id, context):
     )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # /quiz
-# ---------------------------------------------------------
+# =========================================================
 
-async def quiz(update, context):
+async def quiz(
+    update,
+    context
+):
 
-    context.user_data["quiz_mode"] = "all"
+    context.user_data[
+        "quiz_mode"
+    ] = QUIZ_MODE_KK_RU
 
     await send_question(
         update.effective_chat.id,
@@ -417,11 +598,161 @@ async def quiz(update, context):
     )
 
 
-# ---------------------------------------------------------
-# Ответ
-# ---------------------------------------------------------
+# =========================================================
+# Меню выбора теста
+# =========================================================
 
-async def answer(update, context):
+async def quiz_menu(
+    update,
+    context
+):
+
+    query = update.callback_query
+
+    if query:
+
+        await query.answer()
+
+        await query.edit_message_text(
+
+            "🎯 <b>Выбери режим теста:</b>",
+
+            reply_markup=InlineKeyboardMarkup([
+
+                [
+
+                    InlineKeyboardButton(
+                        "🇰🇿 → 🇷🇺 "
+                        "Казахский → Русский",
+                        callback_data=(
+                            "quiz:kk_ru"
+                        )
+                    )
+
+                ],
+
+                [
+
+                    InlineKeyboardButton(
+                        "🇷🇺 → 🇰🇿 "
+                        "Русский → Казахский",
+                        callback_data=(
+                            "quiz:ru_kk"
+                        )
+                    )
+
+                ],
+
+                [
+
+                    InlineKeyboardButton(
+                        "📚 Тренировать ошибки",
+                        callback_data=(
+                            "quiz:errors"
+                        )
+                    )
+
+                ],
+
+                [
+
+                    InlineKeyboardButton(
+                        "◀️ Назад",
+                        callback_data=(
+                            "start_menu"
+                        )
+                    )
+
+                ]
+
+            ]),
+
+            parse_mode="HTML"
+        )
+
+    else:
+
+        await update.message.reply_text(
+
+            "🎯 <b>Выбери режим теста:</b>",
+
+            reply_markup=InlineKeyboardMarkup([
+
+                [
+
+                    InlineKeyboardButton(
+                        "🇰🇿 → 🇷🇺 "
+                        "Казахский → Русский",
+                        callback_data=(
+                            "quiz:kk_ru"
+                        )
+                    )
+
+                ],
+
+                [
+
+                    InlineKeyboardButton(
+                        "🇷🇺 → 🇰🇿 "
+                        "Русский → Казахский",
+                        callback_data=(
+                            "quiz:ru_kk"
+                        )
+                    )
+
+                ],
+
+                [
+
+                    InlineKeyboardButton(
+                        "📚 Тренировать ошибки",
+                        callback_data=(
+                            "quiz:errors"
+                        )
+                    )
+
+                ]
+
+            ]),
+
+            parse_mode="HTML"
+        )
+
+
+# =========================================================
+# Запуск выбранного режима
+# =========================================================
+
+async def start_quiz_mode(
+    update,
+    context,
+    mode
+):
+
+    query = update.callback_query
+
+    await query.answer()
+
+    context.user_data[
+        "quiz_mode"
+    ] = mode
+
+    await query.message.delete()
+
+    await send_question(
+        query.message.chat_id,
+        context
+    )
+
+
+# =========================================================
+# Обработка ответа
+# =========================================================
+
+async def answer(
+    update,
+    context
+):
 
     query = update.callback_query
 
@@ -434,8 +765,10 @@ async def answer(update, context):
     if not question:
 
         await query.edit_message_text(
-            "Вопрос устарел. "
-            "Нажмите /quiz, чтобы начать новый тест."
+
+            "Вопрос устарел.\n\n"
+            "Нажмите /quiz, чтобы "
+            "начать новый тест."
         )
 
         return
@@ -446,32 +779,50 @@ async def answer(update, context):
             query.data.split(":")[1]
         )
 
-        selected_answer = question["answers"][
-            answer_index
-        ]
+        selected_answer = (
+            question["answers"][
+                answer_index
+            ]
+        )
 
-    except (ValueError, IndexError):
+    except (
+        ValueError,
+        IndexError
+    ):
 
         await query.edit_message_text(
-            "Эта кнопка больше недействительна. "
+
+            "Эта кнопка больше "
+            "недействительна.\n\n"
             "Запустите новый тест."
         )
 
         return
 
-    correct_answer = question["correct"]
+    correct_answer = question[
+        "correct"
+    ]
 
-    stats = get_statistics(context)
+    stats = get_statistics(
+        context
+    )
 
     stats["total"] += 1
 
+    # ВАЖНО:
+    # word всегда содержит оба перевода
+
     word = {
-        "kazakh": question["kazakh"],
-        "russian": correct_answer,
+
+        "kazakh":
+            question["kazakh"],
+
+        "russian":
+            question["russian"],
     }
 
     # -----------------------------------------------------
-    # Правильный ответ
+    # Правильно
     # -----------------------------------------------------
 
     if selected_answer == correct_answer:
@@ -488,58 +839,69 @@ async def answer(update, context):
             word
         )
 
-        correct_count = get_word_correct_count(
-            context,
-            word
+        correct_count = (
+            get_word_correct_count(
+                context,
+                word
+            )
         )
 
         if correct_count >= WORDS_TO_LEARN:
 
             result = (
+
                 "✅ <b>Правильно!</b>\n\n"
 
                 "🎓 <b>Слово выучено!</b>\n"
 
                 f"Прогресс: "
-                f"<b>{WORDS_TO_LEARN}/{WORDS_TO_LEARN}</b>"
+                f"<b>{WORDS_TO_LEARN}/"
+                f"{WORDS_TO_LEARN}</b>"
             )
 
         else:
 
             result = (
+
                 "✅ <b>Правильно!</b>\n\n"
 
                 f"Прогресс слова: "
-                f"<b>{correct_count}/{WORDS_TO_LEARN}</b>"
+                f"<b>{correct_count}/"
+                f"{WORDS_TO_LEARN}</b>"
             )
 
     # -----------------------------------------------------
-    # Ошибка
+    # Неправильно
     # -----------------------------------------------------
 
     else:
 
         stats["wrong"] += 1
 
-        # Любая ошибка сбрасывает
-        # серию правильных ответов
+        # Сбрасываем прогресс
+
         reset_word_progress(
             context,
             word
         )
+
+        # Записываем ошибку
 
         add_mistake(
             context,
             word
         )
 
-        mistakes = get_mistakes(context)
+        mistakes = get_mistakes(
+            context
+        )
 
         error_count = mistakes[
             question["kazakh"]
         ]["wrong"]
 
         result = (
+
             "❌ <b>Неправильно.</b>\n\n"
 
             f"Правильный ответ: "
@@ -553,35 +915,43 @@ async def answer(update, context):
         )
 
     # -----------------------------------------------------
-    # Кнопки
+    # Кнопки после ответа
     # -----------------------------------------------------
 
     keyboard = InlineKeyboardMarkup([
 
         [
+
             InlineKeyboardButton(
                 "➡️ Следующее слово",
                 callback_data="next"
             )
+
         ],
 
         [
+
             InlineKeyboardButton(
                 "📖 Словарь",
-                callback_data="dictionary:0"
+                callback_data=(
+                    "dictionary:0"
+                )
             ),
 
             InlineKeyboardButton(
                 "📚 Мои ошибки",
                 callback_data="mistakes"
             )
+
         ],
 
         [
+
             InlineKeyboardButton(
                 "📊 Статистика",
                 callback_data="stats"
             )
+
         ],
 
     ])
@@ -598,35 +968,48 @@ async def answer(update, context):
     )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # Следующий вопрос
-# ---------------------------------------------------------
+# =========================================================
 
-async def next_question(update, context):
+async def next_question(
+    update,
+    context
+):
 
     query = update.callback_query
 
     await query.answer()
 
-    # Проверяем, остались ли неизученные слова
-    progress = get_word_progress(context)
+    progress = get_word_progress(
+        context
+    )
 
     available_words = [
+
         word
+
         for word in WORDS
+
         if progress.get(
             word["kazakh"],
             0
         ) < WORDS_TO_LEARN
+
     ]
 
     # Если все слова изучены
+    # и мы в обычном режиме
+
     if (
+
         not available_words
+
         and context.user_data.get(
             "quiz_mode",
-            "all"
-        ) == "all"
+            QUIZ_MODE_KK_RU
+        ) != QUIZ_MODE_ERRORS
+
     ):
 
         await query.edit_message_text(
@@ -642,24 +1025,36 @@ async def next_question(update, context):
             reply_markup=InlineKeyboardMarkup([
 
                 [
+
                     InlineKeyboardButton(
                         "🔄 Повторить все",
-                        callback_data="repeat_all"
+                        callback_data=(
+                            "repeat_all"
+                        )
                     )
+
                 ],
 
                 [
+
                     InlineKeyboardButton(
                         "📚 Мои ошибки",
-                        callback_data="mistakes"
+                        callback_data=(
+                            "mistakes"
+                        )
                     )
+
                 ],
 
                 [
+
                     InlineKeyboardButton(
                         "📖 Словарь",
-                        callback_data="dictionary:0"
+                        callback_data=(
+                            "dictionary:0"
+                        )
                     )
+
                 ]
 
             ]),
@@ -677,21 +1072,27 @@ async def next_question(update, context):
     )
 
 
-# ---------------------------------------------------------
-# Повторение всех слов
-# ---------------------------------------------------------
+# =========================================================
+# Повторить все
+# =========================================================
 
-async def repeat_all(update, context):
+async def repeat_all(
+    update,
+    context
+):
 
     query = update.callback_query
 
     await query.answer()
 
-    context.user_data["quiz_mode"] = "all"
+    context.user_data[
+        "quiz_mode"
+    ] = QUIZ_MODE_KK_RU
 
-    # Сбрасываем прогресс всех слов
-    # чтобы начать обучение заново
-    context.user_data["word_progress"] = {}
+    # Полностью сбрасываем прогресс
+    context.user_data[
+        "word_progress"
+    ] = {}
 
     await query.message.delete()
 
@@ -701,47 +1102,71 @@ async def repeat_all(update, context):
     )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # Статистика
-# ---------------------------------------------------------
+# =========================================================
 
-async def stats(update, context):
+async def stats(
+    update,
+    context
+):
 
-    user_stats = get_statistics(context)
+    user_stats = get_statistics(
+        context
+    )
 
-    total = user_stats["total"]
+    total = user_stats[
+        "total"
+    ]
 
-    correct = user_stats["correct"]
+    correct = user_stats[
+        "correct"
+    ]
 
-    wrong = user_stats["wrong"]
+    wrong = user_stats[
+        "wrong"
+    ]
 
     percentage = (
+
         correct / total * 100
+
         if total
+
         else 0
     )
 
-    learned = get_learned_words_count(
-        context
+    learned = (
+        get_learned_words_count(
+            context
+        )
     )
 
-    in_progress = get_words_in_progress_count(
-        context
+    in_progress = (
+        get_words_in_progress_count(
+            context
+        )
     )
 
     not_started = max(
+
         0,
+
         len(WORDS)
         - learned
         - in_progress
     )
 
-    mistakes = get_mistakes(context)
+    mistakes = get_mistakes(
+        context
+    )
 
-    # Процент изученных слов
     learned_percentage = (
+
         learned / len(WORDS) * 100
+
         if WORDS
+
         else 0
     )
 
@@ -752,7 +1177,8 @@ async def stats(update, context):
         "📚 <b>Изучение слов</b>\n\n"
 
         f"🎓 Изучено: "
-        f"<b>{learned}</b> / {len(WORDS)} "
+        f"<b>{learned}</b> / "
+        f"{len(WORDS)} "
         f"({learned_percentage:.1f}%)\n"
 
         f"📖 В процессе: "
@@ -782,24 +1208,32 @@ async def stats(update, context):
     keyboard = InlineKeyboardMarkup([
 
         [
+
             InlineKeyboardButton(
-                "➡️ Следующее слово",
-                callback_data="next"
+                "🎯 Тест",
+                callback_data="quiz_menu"
             )
+
         ],
 
         [
+
             InlineKeyboardButton(
                 "📚 Мои ошибки",
                 callback_data="mistakes"
             )
+
         ],
 
         [
+
             InlineKeyboardButton(
                 "📖 Словарь",
-                callback_data="dictionary:0"
+                callback_data=(
+                    "dictionary:0"
+                )
             )
+
         ]
 
     ])
@@ -829,22 +1263,29 @@ async def stats(update, context):
         )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # Мои ошибки
-# ---------------------------------------------------------
+# =========================================================
 
-async def mistakes(update, context):
+async def mistakes(
+    update,
+    context
+):
 
     query = update.callback_query
 
     if query:
+
         await query.answer()
 
-    mistakes_data = get_mistakes(context)
+    mistakes_data = get_mistakes(
+        context
+    )
 
     if not mistakes_data:
 
         text = (
+
             "📚 <b>Мои ошибки</b>\n\n"
 
             "🎉 Пока ошибок нет!\n\n"
@@ -855,17 +1296,23 @@ async def mistakes(update, context):
         keyboard = InlineKeyboardMarkup([
 
             [
+
                 InlineKeyboardButton(
-                    "🎯 Начать тест",
-                    callback_data="next"
+                    "🎯 Тест",
+                    callback_data="quiz_menu"
                 )
+
             ],
 
             [
+
                 InlineKeyboardButton(
                     "📖 Словарь",
-                    callback_data="dictionary:0"
+                    callback_data=(
+                        "dictionary:0"
+                    )
                 )
+
             ]
 
         ])
@@ -909,27 +1356,37 @@ async def mistakes(update, context):
                 f"❌ {word['wrong']}"
             )
 
-        text = "\n".join(text_lines)
+        text = "\n".join(
+            text_lines
+        )
 
         keyboard = InlineKeyboardMarkup([
 
             [
+
                 InlineKeyboardButton(
                     "🎯 Тренировать ошибки",
-                    callback_data="mistakes_quiz"
+                    callback_data=(
+                        "quiz:errors"
+                    )
                 )
+
             ],
 
             [
+
                 InlineKeyboardButton(
                     "📖 Словарь",
-                    callback_data="dictionary:0"
+                    callback_data=(
+                        "dictionary:0"
+                    )
                 ),
 
                 InlineKeyboardButton(
                     "📊 Статистика",
                     callback_data="stats"
                 )
+
             ]
 
         ])
@@ -957,41 +1414,14 @@ async def mistakes(update, context):
         )
 
 
-# ---------------------------------------------------------
-# Тренировка ошибок
-# ---------------------------------------------------------
-
-async def mistakes_quiz(update, context):
-
-    query = update.callback_query
-
-    await query.answer()
-
-    mistakes_data = get_mistakes(context)
-
-    if not mistakes_data:
-
-        await query.edit_message_text(
-            "🎉 Ошибок больше нет!"
-        )
-
-        return
-
-    context.user_data["quiz_mode"] = "errors"
-
-    await query.message.delete()
-
-    await send_question(
-        query.message.chat_id,
-        context
-    )
-
-
-# ---------------------------------------------------------
+# =========================================================
 # Словарь
-# ---------------------------------------------------------
+# =========================================================
 
-async def dictionary(update, context):
+async def dictionary(
+    update,
+    context
+):
 
     query = update.callback_query
 
@@ -1033,10 +1463,14 @@ async def show_dictionary(
     message=None
 ):
 
-    total_words = len(WORDS)
+    total_words = len(
+        WORDS
+    )
 
     total_pages = math.ceil(
-        total_words / WORDS_PER_PAGE
+
+        total_words
+        / WORDS_PER_PAGE
     )
 
     if total_pages == 0:
@@ -1044,9 +1478,13 @@ async def show_dictionary(
         text = "📖 Словарь пуст."
 
         if message:
-            await message.edit_text(text)
+
+            await message.edit_text(
+                text
+            )
 
         else:
+
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=text
@@ -1055,39 +1493,58 @@ async def show_dictionary(
         return
 
     page = max(
+
         0,
+
         min(
             page,
             total_pages - 1
         )
     )
 
-    start = page * WORDS_PER_PAGE
+    start = (
+        page
+        * WORDS_PER_PAGE
+    )
 
     end = min(
-        start + WORDS_PER_PAGE,
+
+        start
+        + WORDS_PER_PAGE,
+
         total_words
     )
 
-    page_words = WORDS[start:end]
+    page_words = WORDS[
+        start:end
+    ]
 
     text_lines = [
 
         f"📖 <b>Словарь</b>  •  "
-        f"страница {page + 1}/{total_pages}",
+        f"страница "
+        f"{page + 1}/"
+        f"{total_pages}",
 
         ""
     ]
 
-    progress = get_word_progress(context)
+    progress = get_word_progress(
+        context
+    )
 
     for index, word in enumerate(
+
         page_words,
+
         start=start + 1
+
     ):
 
         word_progress = progress.get(
+
             word["kazakh"],
+
             0
         )
 
@@ -1097,7 +1554,10 @@ async def show_dictionary(
 
         elif word_progress > 0:
 
-            status = f"🔄 {word_progress}/5"
+            status = (
+                f"🔄 {word_progress}/"
+                f"{WORDS_TO_LEARN}"
+            )
 
         else:
 
@@ -1113,7 +1573,9 @@ async def show_dictionary(
             f"{word['russian']}"
         )
 
-    text = "\n".join(text_lines)
+    text = "\n".join(
+        text_lines
+    )
 
     buttons = []
 
@@ -1128,7 +1590,8 @@ async def show_dictionary(
                 "⬅️ Предыдущие",
 
                 callback_data=(
-                    f"dictionary:{page - 1}"
+                    f"dictionary:"
+                    f"{page - 1}"
                 )
             )
         )
@@ -1142,29 +1605,44 @@ async def show_dictionary(
                 "Следующие ➡️",
 
                 callback_data=(
-                    f"dictionary:{page + 1}"
+                    f"dictionary:"
+                    f"{page + 1}"
                 )
             )
         )
 
     if navigation:
-        buttons.append(navigation)
+
+        buttons.append(
+            navigation
+        )
 
     buttons.append([
 
         InlineKeyboardButton(
-            "🎯 К тесту",
-            callback_data="next"
+            "🎯 Тест",
+            callback_data="quiz_menu"
         ),
 
         InlineKeyboardButton(
-            "📚 Мои ошибки",
+            "📚 Ошибки",
             callback_data="mistakes"
         )
 
     ])
 
-    keyboard = InlineKeyboardMarkup(buttons)
+    buttons.append([
+
+        InlineKeyboardButton(
+            "📊 Статистика",
+            callback_data="stats"
+        )
+
+    ])
+
+    keyboard = InlineKeyboardMarkup(
+        buttons
+    )
 
     if message:
 
@@ -1191,71 +1669,116 @@ async def show_dictionary(
         )
 
 
-# ---------------------------------------------------------
-# /start
-# ---------------------------------------------------------
+# =========================================================
+# Главное меню
+# =========================================================
 
-async def start(update, context):
+async def start(
+    update,
+    context
+):
+
+    await show_start_menu(
+        update,
+        context
+    )
+
+
+async def show_start_menu(
+    update,
+    context
+):
 
     keyboard = InlineKeyboardMarkup([
 
         [
+
             InlineKeyboardButton(
-                "🎯 Начать тест",
-                callback_data="next"
+                "🎯 Тест",
+                callback_data="quiz_menu"
             )
+
         ],
 
         [
+
             InlineKeyboardButton(
                 "📖 Словарь",
-                callback_data="dictionary:0"
+                callback_data=(
+                    "dictionary:0"
+                )
             )
+
         ],
 
         [
+
             InlineKeyboardButton(
                 "📚 Мои ошибки",
                 callback_data="mistakes"
             )
+
         ],
 
         [
+
             InlineKeyboardButton(
                 "📊 Статистика",
                 callback_data="stats"
             )
+
         ],
 
     ])
 
-    await update.message.reply_text(
+    if update.callback_query:
 
-        "Привет! Я бот для изучения "
-        "казахского языка.\n\n"
+        await update.callback_query.edit_message_text(
 
-        "Выбери режим:",
+            "Привет! Я бот для изучения "
+            "казахского языка.\n\n"
+            "Выбери режим:",
 
-        reply_markup=keyboard
-    )
+            reply_markup=keyboard
+        )
+
+    else:
+
+        await update.message.reply_text(
+
+            "Привет! Я бот для изучения "
+            "казахского языка.\n\n"
+            "Выбери режим:",
+
+            reply_markup=keyboard
+        )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # Обработчик кнопок
-# ---------------------------------------------------------
+# =========================================================
 
-async def button_handler(update, context):
+async def button_handler(
+    update,
+    context
+):
 
     query = update.callback_query
 
     data = query.data
 
-    if data.startswith("answer:"):
+    # Ответ на вопрос
+
+    if data.startswith(
+        "answer:"
+    ):
 
         await answer(
             update,
             context
         )
+
+    # Следующее слово
 
     elif data == "next":
 
@@ -1264,12 +1787,64 @@ async def button_handler(update, context):
             context
         )
 
+    # Меню теста
+
+    elif data == "quiz_menu":
+
+        await quiz_menu(
+            update,
+            context
+        )
+
+    # Казахский -> Русский
+
+    elif data == "quiz:kk_ru":
+
+        await start_quiz_mode(
+
+            update,
+
+            context,
+
+            QUIZ_MODE_KK_RU
+        )
+
+    # Русский -> Казахский
+
+    elif data == "quiz:ru_kk":
+
+        await start_quiz_mode(
+
+            update,
+
+            context,
+
+            QUIZ_MODE_RU_KK
+        )
+
+    # Тренировка ошибок
+
+    elif data == "quiz:errors":
+
+        await start_quiz_mode(
+
+            update,
+
+            context,
+
+            QUIZ_MODE_ERRORS
+        )
+
+    # Повторить все
+
     elif data == "repeat_all":
 
         await repeat_all(
             update,
             context
         )
+
+    # Статистика
 
     elif data == "stats":
 
@@ -1278,12 +1853,18 @@ async def button_handler(update, context):
             context
         )
 
-    elif data.startswith("dictionary:"):
+    # Словарь
+
+    elif data.startswith(
+        "dictionary:"
+    ):
 
         await dictionary(
             update,
             context
         )
+
+    # Ошибки
 
     elif data == "mistakes":
 
@@ -1292,17 +1873,19 @@ async def button_handler(update, context):
             context
         )
 
-    elif data == "mistakes_quiz":
+    # Главное меню
 
-        await mistakes_quiz(
+    elif data == "start_menu":
+
+        await show_start_menu(
             update,
             context
         )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # Запуск
-# ---------------------------------------------------------
+# =========================================================
 
 def main():
 
@@ -1312,39 +1895,56 @@ def main():
         .build()
     )
 
+    # /start
+
     application.add_handler(
+
         CommandHandler(
             "start",
             start
         )
     )
 
+    # /quiz
+
     application.add_handler(
+
         CommandHandler(
             "quiz",
             quiz
         )
     )
 
+    # /stats
+
     application.add_handler(
+
         CommandHandler(
             "stats",
             stats
         )
     )
 
+    # /dictionary
+
     application.add_handler(
+
         CommandHandler(
             "dictionary",
             dictionary
         )
     )
 
+    # Все inline-кнопки
+
     application.add_handler(
+
         CallbackQueryHandler(
             button_handler
         )
     )
+
+    # Webhook для Render
 
     application.run_webhook(
 
@@ -1360,5 +1960,10 @@ def main():
     )
 
 
+# =========================================================
+# Main
+# =========================================================
+
 if __name__ == "__main__":
+
     main()
