@@ -1,6 +1,7 @@
 import os
 import random
 import re
+import math
 
 from telegram import (
     Update,
@@ -14,16 +15,18 @@ from telegram.ext import (
     ContextTypes,
 )
 
-
 TOKEN = os.environ["TELEGRAM_TOKEN"]
 
 PORT = int(os.environ.get("PORT", "10000"))
 PUBLIC_URL = os.environ["RENDER_EXTERNAL_URL"]
 
 
+# ---------------------------------------------------------
+# Загрузка слов
+# ---------------------------------------------------------
+
 def load_words(filename):
     """Read words from Markdown table."""
-
     words = []
 
     with open(filename, "r", encoding="utf-8") as f:
@@ -64,24 +67,15 @@ def load_words(filename):
     return words
 
 
-# Load dictionary when the bot starts
 WORDS = load_words("words.md")
 
 print(f"Loaded {len(WORDS)} words")
 
 
-# Statistics for users.
-#
-# Example:
-# {
-#     123456789: {
-#         "total": 10,
-#         "correct": 8,
-#         "wrong": 2
-#     }
-# }
-#
-# The data exists only while the bot is running.
+# ---------------------------------------------------------
+# Статистика
+# ---------------------------------------------------------
+
 statistics = {}
 
 
@@ -96,20 +90,22 @@ def get_statistics(user_id):
     return statistics[user_id]
 
 
+# ---------------------------------------------------------
+# Тест
+# ---------------------------------------------------------
+
 def get_question():
     """Generate random question."""
 
     question = random.choice(WORDS)
-
     correct_answer = question["russian"]
 
-    # Get words with different translations
     other_words = [
-        word for word in WORDS
+        word
+        for word in WORDS
         if word["russian"] != correct_answer
     ]
 
-    # Three wrong answers
     wrong_answers = random.sample(
         other_words,
         min(3, len(other_words))
@@ -125,42 +121,28 @@ def get_question():
     return question, answers
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Привет! Я бот для изучения казахского языка.\n\n"
-        "Команды:\n"
-        "/quiz — начать тест\n"
-        "/stats — показать статистику"
-    )
-
-
 async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start quiz."""
-
-    await send_question(
-        update.effective_chat.id,
-        context
-    )
+    await send_question(update.effective_chat.id, context)
 
 
 async def send_question(chat_id, context):
-    """Send a new question."""
 
     question, answers = get_question()
 
-    # Store correct answer for this chat
+    # Сохраняем текущий вопрос
     context.user_data["current_question"] = {
         "kazakh": question["kazakh"],
         "correct": question["russian"],
+        "answers": answers,
     }
 
     buttons = []
 
-    for answer in answers:
+    for index, answer_text in enumerate(answers):
         buttons.append([
             InlineKeyboardButton(
-                answer,
-                callback_data=f"answer:{answer}"
+                answer_text,
+                callback_data=f"answer:{index}"
             )
         ])
 
@@ -168,15 +150,16 @@ async def send_question(chat_id, context):
 
     await context.bot.send_message(
         chat_id=chat_id,
-        text=f"🇰🇿 <b>{question['kazakh']}</b>\n\n"
-             f"Выберите перевод:",
+        text=(
+            f"🇰🇿 <b>{question['kazakh']}</b>\n\n"
+            f"Выберите перевод:"
+        ),
         reply_markup=keyboard,
         parse_mode="HTML",
     )
 
 
 async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Process user's answer."""
 
     query = update.callback_query
     await query.answer()
@@ -189,7 +172,10 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    selected_answer = query.data[len("answer:"):]
+    # answer:0 / answer:1 / answer:2 / answer:3
+    answer_index = int(query.data.split(":")[1])
+
+    selected_answer = question["answers"][answer_index]
     correct_answer = question["correct"]
 
     stats = get_statistics(update.effective_user.id)
@@ -197,12 +183,13 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stats["total"] += 1
 
     if selected_answer == correct_answer:
+
         stats["correct"] += 1
 
-        result = (
-            "✅ <b>Правильно!</b>"
-        )
+        result = "✅ <b>Правильно!</b>"
+
     else:
+
         stats["wrong"] += 1
 
         result = (
@@ -219,6 +206,10 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
         [
             InlineKeyboardButton(
+                "📖 Словарь",
+                callback_data="dictionary:0"
+            ),
+            InlineKeyboardButton(
                 "📊 Статистика",
                 callback_data="stats"
             )
@@ -234,7 +225,6 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def next_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show next question."""
 
     query = update.callback_query
     await query.answer()
@@ -247,20 +237,25 @@ async def next_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# ---------------------------------------------------------
+# Статистика
+# ---------------------------------------------------------
+
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show statistics."""
 
     user_id = update.effective_user.id
+
     user_stats = get_statistics(user_id)
 
     total = user_stats["total"]
     correct = user_stats["correct"]
     wrong = user_stats["wrong"]
 
-    if total:
-        percentage = correct / total * 100
-    else:
-        percentage = 0
+    percentage = (
+        correct / total * 100
+        if total
+        else 0
+    )
 
     text = (
         "📊 <b>Твоя статистика</b>\n\n"
@@ -270,36 +265,209 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Результат: <b>{percentage:.1f}%</b>"
     )
 
-    if update.callback_query:
-        query = update.callback_query
-        await query.answer()
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "➡️ Следующее слово",
+                callback_data="next"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "📖 Словарь",
+                callback_data="dictionary:0"
+            )
+        ]
+    ])
 
-        keyboard = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(
-                    "➡️ Следующее слово",
-                    callback_data="next"
-                )
-            ]
-        ])
+    if update.callback_query:
+
+        query = update.callback_query
+
+        await query.answer()
 
         await query.edit_message_text(
             text,
             reply_markup=keyboard,
             parse_mode="HTML",
         )
+
     else:
+
         await update.message.reply_text(
             text,
+            reply_markup=keyboard,
             parse_mode="HTML",
         )
 
 
-async def button_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
+# ---------------------------------------------------------
+# Словарь
+# ---------------------------------------------------------
+
+WORDS_PER_PAGE = 15
+
+
+async def dictionary(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    query = update.callback_query
+
+    if query:
+        await query.answer()
+
+        # dictionary:0
+        page = int(query.data.split(":")[1])
+
+        await show_dictionary(
+            query.message.chat_id,
+            page,
+            context,
+            message=query.message
+        )
+
+    else:
+
+        await show_dictionary(
+            update.effective_chat.id,
+            0,
+            context
+        )
+
+
+async def show_dictionary(
+    chat_id,
+    page,
+    context,
+    message=None
 ):
-    """Handle all inline buttons."""
+
+    total_words = len(WORDS)
+
+    total_pages = math.ceil(
+        total_words / WORDS_PER_PAGE
+    )
+
+    # Защита от выхода за пределы
+    page = max(
+        0,
+        min(page, total_pages - 1)
+    )
+
+    start = page * WORDS_PER_PAGE
+    end = min(
+        start + WORDS_PER_PAGE,
+        total_words
+    )
+
+    page_words = WORDS[start:end]
+
+    text_lines = [
+        f"📖 <b>Словарь</b>  •  страница {page + 1}/{total_pages}",
+        ""
+    ]
+
+    for index, word in enumerate(page_words, start=start + 1):
+
+        text_lines.append(
+            f"<b>{index}.</b> "
+            f"{word['kazakh']} — {word['russian']}"
+        )
+
+    text = "\n".join(text_lines)
+
+    buttons = []
+
+    navigation = []
+
+    if page > 0:
+        navigation.append(
+            InlineKeyboardButton(
+                "⬅️ Предыдущие",
+                callback_data=f"dictionary:{page - 1}"
+            )
+        )
+
+    if page < total_pages - 1:
+        navigation.append(
+            InlineKeyboardButton(
+                "Следующие ➡️",
+                callback_data=f"dictionary:{page + 1}"
+            )
+        )
+
+    if navigation:
+        buttons.append(navigation)
+
+    buttons.append([
+        InlineKeyboardButton(
+            "🎯 К тесту",
+            callback_data="next"
+        ),
+        InlineKeyboardButton(
+            "📊 Статистика",
+            callback_data="stats"
+        ),
+    ])
+
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    if message:
+
+        await message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+        )
+
+    else:
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+        )
+
+
+# ---------------------------------------------------------
+# /start
+# ---------------------------------------------------------
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "🎯 Начать тест",
+                callback_data="next"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "📖 Словарь",
+                callback_data="dictionary:0"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "📊 Статистика",
+                callback_data="stats"
+            )
+        ],
+    ])
+
+    await update.message.reply_text(
+        "Привет! Я бот для изучения казахского языка.\n\n"
+        "Выбери режим:",
+        reply_markup=keyboard
+    )
+
+
+# ---------------------------------------------------------
+# Обработчик кнопок
+# ---------------------------------------------------------
+
+async def button_handler(update, context):
 
     query = update.callback_query
 
@@ -312,9 +480,21 @@ async def button_handler(
     elif query.data == "stats":
         await stats(update, context)
 
+    elif query.data.startswith("dictionary:"):
+        await dictionary(update, context)
+
+
+# ---------------------------------------------------------
+# Запуск
+# ---------------------------------------------------------
 
 def main():
-    application = Application.builder().token(TOKEN).build()
+
+    application = (
+        Application.builder()
+        .token(TOKEN)
+        .build()
+    )
 
     application.add_handler(
         CommandHandler("start", start)
@@ -326,6 +506,10 @@ def main():
 
     application.add_handler(
         CommandHandler("stats", stats)
+    )
+
+    application.add_handler(
+        CommandHandler("dictionary", dictionary)
     )
 
     application.add_handler(
