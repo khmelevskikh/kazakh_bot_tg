@@ -21,7 +21,7 @@ from telegram.ext import (
 # ============================================================
 
 TOKEN = os.environ["TELEGRAM_TOKEN"]
-ADMIN_ID = os.environ["TELEGRAM_ADMIN_ID"]
+ADMIN_ID = int(os.environ["TELEGRAM_ADMIN_ID"])
 
 PORT = int(os.environ.get("PORT", "10000"))
 PUBLIC_URL = os.environ["RENDER_EXTERNAL_URL"]
