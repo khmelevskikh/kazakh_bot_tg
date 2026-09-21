@@ -637,6 +637,12 @@ async def show_quiz_menu(
         ],
         [
             InlineKeyboardButton(
+                "📖 Словарь",
+                callback_data="dictionary:0"
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 "◀️ Назад",
                 callback_data="start_menu"
             )
@@ -660,7 +666,6 @@ async def show_quiz_menu(
             parse_mode="HTML",
             reply_markup=markup,
         )
-
 
 # ============================================================
 # QUIZ COMMAND
