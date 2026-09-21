@@ -363,7 +363,7 @@ async def users_count(
     # Только администратор
     if user_id != ADMIN_ID:
         await update.message.reply_text(
-            "⛔ Доступ запрещён."
+            f"⛔ Доступ запрещён для <b>{user_id}</b>."
         )
         return
 
